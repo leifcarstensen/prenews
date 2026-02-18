@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { db } from "@/lib/db";
+import { CATEGORY_NAV } from "@/lib/categories";
 import {
   pgTable,
   uuid,
@@ -25,17 +26,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "always",
       priority: 1.0,
     },
+    ...CATEGORY_NAV.map((category) => ({
+      url: `${SITE_URL}${category.href}`,
+      lastModified: new Date(),
+      changeFrequency: "always" as const,
+      priority: 0.9,
+    })),
     {
       url: `${SITE_URL}/tomorrow`,
       lastModified: new Date(),
-      changeFrequency: "always",
-      priority: 0.9,
+      changeFrequency: "hourly",
+      priority: 0.6,
     },
     {
       url: `${SITE_URL}/moved`,
       lastModified: new Date(),
-      changeFrequency: "always",
-      priority: 0.9,
+      changeFrequency: "hourly",
+      priority: 0.6,
     },
   ];
 

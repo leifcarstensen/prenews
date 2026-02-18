@@ -10,6 +10,7 @@ export interface MarketCardProps {
   resolvesInText: string;
   trustTier: string;
   source: string;
+  volumeText?: string;
   delta24hText?: string | null;
   delta1hText?: string | null;
   rank?: number;
@@ -24,6 +25,7 @@ export function MarketCard({
   resolvesInText,
   trustTier,
   source,
+  volumeText,
   delta24hText,
   delta1hText,
   rank,
@@ -54,6 +56,12 @@ export function MarketCard({
             <span>{resolvesInText}</span>
             <span className="text-border">|</span>
             <span className="capitalize">{source}</span>
+            {volumeText && (
+              <>
+                <span className="text-border">|</span>
+                <span>Vol {volumeText}</span>
+              </>
+            )}
           </div>
         </div>
 

@@ -2,33 +2,32 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { CATEGORY_NAV } from "@/lib/categories";
 
 const NAV_ITEMS = [
-  { href: "/tomorrow", label: "Likely" },
-  { href: "/moved", label: "Moved" },
+  { href: "/", label: "Home" },
+  ...CATEGORY_NAV.map((item) => ({ href: item.href, label: item.label })),
 ];
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [searchOpen, setSearchOpen] = useState(false);
 
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-md">
-        <div className="mx-auto flex h-12 max-w-3xl items-center justify-between px-4">
+        <div className="mx-auto flex min-h-12 max-w-5xl items-center justify-between gap-4 px-4 py-2">
           <Link
-            href="/tomorrow"
+            href="/"
             className="text-base font-semibold tracking-tight text-text"
           >
             PreNews
           </Link>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex flex-wrap items-center justify-end gap-1">
             {NAV_ITEMS.map((item) => {
               const isActive =
-                pathname === item.href ||
-                (item.href === "/tomorrow" && pathname === "/");
+                pathname === item.href
+                || (item.href !== "/" && pathname?.startsWith(item.href));
               return (
                 <Link
                   key={item.href}
@@ -47,7 +46,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
     </div>
   );
 }

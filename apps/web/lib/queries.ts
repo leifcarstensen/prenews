@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { sql, eq, and, desc, asc, gte, lte, ilike } from "drizzle-orm";
+import { eq, and, desc, asc, gte, ilike, isNotNull } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
+import { inferNewsCategory, type NewsCategory } from "./categories";
 
 // Re-declare tables for the web app (avoids importing from worker)
 const market = pgTable("market", {
@@ -95,6 +96,7 @@ export interface MarketWithState {
   stateUpdatedAt: Date;
   rank: number;
   score: number;
+  normalizedCategory?: NewsCategory;
 }
 
 export async function getFeedItems(
@@ -141,6 +143,75 @@ export async function getFeedItems(
     .limit(limit);
 
   return (await query) as MarketWithState[];
+}
+
+interface VolumeFeedOptions {
+  limit?: number;
+  category?: NewsCategory;
+}
+
+export async function getTopMarketsByVolume(
+  options: VolumeFeedOptions = {},
+): Promise<MarketWithState[]> {
+  const limit = options.limit ?? 20;
+  const fetchSize = options.category ? Math.max(limit * 30, 300) : limit;
+
+  const rows = await db
+    .select({
+      id: market.id,
+      source: market.source,
+      slug: market.slug,
+      titleRaw: market.titleRaw,
+      headline: market.headline,
+      articleBody: market.articleBody,
+      articleMetaDescription: market.articleMetaDescription,
+      articleImageUrl: market.articleImageUrl,
+      category: market.category,
+      tags: market.tags,
+      marketType: market.marketType,
+      outcomes: market.outcomes,
+      resolvesAt: market.resolvesAt,
+      sourceUrl: market.sourceUrl,
+      imageUrl: market.imageUrl,
+      p: marketState.p,
+      pJson: marketState.pJson,
+      volume24h: marketState.volume24h,
+      liquidity: marketState.liquidity,
+      spread: marketState.spread,
+      trustTier: marketState.trustTier,
+      stateUpdatedAt: marketState.updatedAt,
+    })
+    .from(market)
+    .innerJoin(marketState, eq(market.id, marketState.marketId))
+    .where(and(eq(market.status, "active"), isNotNull(marketState.volume24h)))
+    .orderBy(desc(marketState.volume24h), desc(marketState.liquidity), desc(marketState.p))
+    .limit(fetchSize);
+
+  const withCategory = rows.map((row) => {
+    const normalizedCategory = inferNewsCategory({
+      category: row.category,
+      titleRaw: row.titleRaw,
+      slug: row.slug,
+      tags: row.tags,
+    });
+
+    return {
+      ...row,
+      normalizedCategory,
+    };
+  });
+
+  const filtered = options.category
+    ? withCategory.filter((row) => row.normalizedCategory === options.category)
+    : withCategory;
+
+  return filtered
+    .slice(0, limit)
+    .map((row, idx) => ({
+      ...row,
+      rank: idx + 1,
+      score: row.volume24h ?? 0,
+    })) as MarketWithState[];
 }
 
 export interface MarketDetail extends MarketWithState {
