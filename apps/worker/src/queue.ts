@@ -1,18 +1,64 @@
 import { Queue, Worker, type Job } from "bullmq";
 
-const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
-if (!/^rediss?:\/\//.test(redisUrl)) {
-  throw new Error(
-    "REDIS_URL must start with redis:// or rediss://. Upstash REST URLs (https://...) are not supported by BullMQ; use the Upstash Redis TCP URL instead.",
+function parseRedisConnection() {
+  const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+
+  if (redisUrl.startsWith("http://") || redisUrl.startsWith("https://")) {
+    throw new Error(
+      "REDIS_URL is an HTTP endpoint. BullMQ requires Redis TCP using redis:// or rediss:// (Upstash REST URLs are not supported).",
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(redisUrl);
+  } catch {
+    throw new Error("REDIS_URL is not a valid URL. Expected format: rediss://user:password@host:6379");
+  }
+
+  if (parsed.protocol !== "redis:" && parsed.protocol !== "rediss:") {
+    throw new Error(
+      `REDIS_URL protocol "${parsed.protocol}" is invalid. Use redis:// or rediss://.`,
+    );
+  }
+
+  const port = parsed.port ? Number.parseInt(parsed.port, 10) : 6379;
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+    throw new Error(`REDIS_URL port "${parsed.port}" is invalid.`);
+  }
+
+  if (!parsed.hostname) {
+    throw new Error("REDIS_URL host is missing.");
+  }
+
+  const username = parsed.username ? decodeURIComponent(parsed.username) : undefined;
+  const password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
+
+  if (!password) {
+    console.warn(
+      "[queue] REDIS_URL has no password. If using Upstash, this is usually required.",
+    );
+  }
+
+  console.log(
+    `[queue] Redis target ${parsed.protocol}//${parsed.hostname}:${port} (user=${username ?? "default"})`,
   );
+
+  return {
+    host: parsed.hostname,
+    port,
+    username,
+    password,
+    tls: parsed.protocol === "rediss:" ? {} : undefined,
+    // BullMQ/ioredis stability defaults.
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    family: 0 as const,
+    connectTimeout: 15000,
+  };
 }
 
-const redisConnection = {
-  url: redisUrl,
-  // BullMQ requires null for robust command retry behavior.
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-};
+const redisConnection = parseRedisConnection();
 
 export const JOB_NAMES = {
   DISCOVERY: "discovery",
