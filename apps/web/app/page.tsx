@@ -9,7 +9,7 @@ export const revalidate = 60;
 
 export const metadata = {
   title: "Top Markets by Volume — PreNews",
-  description: "The 20 highest-volume prediction markets across categories, ranked by 24-hour trading activity.",
+  description: "The 20 highest-volume prediction markets across categories, ranked by cumulative volume for markets resolving within a year.",
 };
 
 async function HomeFeed() {
@@ -40,7 +40,7 @@ async function HomeFeed() {
           resolvesInText={formatResolvesIn(item.resolvesAt)}
           trustTier={item.trustTier}
           source={item.source}
-          volumeText={formatUsdCompact(item.volume24h)}
+          volumeText={formatUsdCompact(item.volumeTotal ?? item.volume24h)}
           rank={item.rank}
         />
       ))}
@@ -54,7 +54,7 @@ export default function HomePage() {
       <div className="mb-6">
         <h1 className="text-lg font-semibold text-text">Front Page</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Top 20 markets ranked by 24-hour volume across all categories.
+          Top 20 markets ranked by total volume across all categories (resolving within 12 months).
         </p>
       </div>
 

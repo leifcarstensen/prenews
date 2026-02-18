@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, asc, gte, ilike, isNotNull } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, ilike } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -42,6 +42,7 @@ const marketState = pgTable("market_state", {
   p: doublePrecision("p").notNull(),
   pJson: jsonb("p_json").$type<Record<string, number>>(),
   topOutcomeProb: doublePrecision("top_outcome_prob"),
+  volumeTotal: doublePrecision("volume_total"),
   volume24h: doublePrecision("volume_24h"),
   liquidity: doublePrecision("liquidity"),
   bestBid: doublePrecision("best_bid"),
@@ -89,6 +90,7 @@ export interface MarketWithState {
   imageUrl: string | null;
   p: number;
   pJson: Record<string, number> | null;
+  volumeTotal: number | null;
   volume24h: number | null;
   liquidity: number | null;
   spread: number | null;
@@ -123,6 +125,7 @@ export async function getFeedItems(
       imageUrl: market.imageUrl,
       p: marketState.p,
       pJson: marketState.pJson,
+      volumeTotal: marketState.volumeTotal,
       volume24h: marketState.volume24h,
       liquidity: marketState.liquidity,
       spread: marketState.spread,
@@ -148,13 +151,16 @@ export async function getFeedItems(
 interface VolumeFeedOptions {
   limit?: number;
   category?: NewsCategory;
+  maxDaysToResolve?: number;
 }
 
 export async function getTopMarketsByVolume(
   options: VolumeFeedOptions = {},
 ): Promise<MarketWithState[]> {
   const limit = options.limit ?? 20;
+  const maxDaysToResolve = options.maxDaysToResolve ?? 365;
   const fetchSize = options.category ? Math.max(limit * 30, 300) : limit;
+  const maxResolution = new Date(Date.now() + maxDaysToResolve * 24 * 60 * 60 * 1000);
 
   const rows = await db
     .select({
@@ -175,6 +181,7 @@ export async function getTopMarketsByVolume(
       imageUrl: market.imageUrl,
       p: marketState.p,
       pJson: marketState.pJson,
+      volumeTotal: marketState.volumeTotal,
       volume24h: marketState.volume24h,
       liquidity: marketState.liquidity,
       spread: marketState.spread,
@@ -183,8 +190,18 @@ export async function getTopMarketsByVolume(
     })
     .from(market)
     .innerJoin(marketState, eq(market.id, marketState.marketId))
-    .where(and(eq(market.status, "active"), isNotNull(marketState.volume24h)))
-    .orderBy(desc(marketState.volume24h), desc(marketState.liquidity), desc(marketState.p))
+    .where(
+      and(
+        eq(market.status, "active"),
+        lte(market.resolvesAt, maxResolution),
+      ),
+    )
+    .orderBy(
+      desc(marketState.volumeTotal),
+      desc(marketState.volume24h),
+      desc(marketState.liquidity),
+      desc(marketState.p),
+    )
     .limit(fetchSize);
 
   const withCategory = rows.map((row) => {
@@ -210,7 +227,7 @@ export async function getTopMarketsByVolume(
     .map((row, idx) => ({
       ...row,
       rank: idx + 1,
-      score: row.volume24h ?? 0,
+      score: row.volumeTotal ?? row.volume24h ?? 0,
     })) as MarketWithState[];
 }
 
@@ -238,6 +255,7 @@ export async function getMarketBySlug(slug: string): Promise<MarketDetail | null
       imageUrl: market.imageUrl,
       p: marketState.p,
       pJson: marketState.pJson,
+      volumeTotal: marketState.volumeTotal,
       volume24h: marketState.volume24h,
       liquidity: marketState.liquidity,
       spread: marketState.spread,
@@ -301,6 +319,7 @@ export async function searchMarkets(
       imageUrl: market.imageUrl,
       p: marketState.p,
       pJson: marketState.pJson,
+      volumeTotal: marketState.volumeTotal,
       volume24h: marketState.volume24h,
       liquidity: marketState.liquidity,
       spread: marketState.spread,

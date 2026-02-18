@@ -59,7 +59,7 @@ export function MarketCard({
             {volumeText && (
               <>
                 <span className="text-border">|</span>
-                <span>Vol {volumeText}</span>
+                <span>Total Vol {volumeText}</span>
               </>
             )}
           </div>

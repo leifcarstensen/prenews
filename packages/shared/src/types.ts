@@ -19,6 +19,7 @@ export interface MarketStateRaw {
   p: number;
   pJson?: Record<string, number>;
   topOutcomeProb?: number;
+  volumeTotal?: number;
   volume24h?: number;
   liquidity?: number;
   bestBid?: number;

@@ -86,6 +86,7 @@ export class KalshiAdapter implements MarketAdapter {
       }
 
       const spread = yesBid != null && yesAsk != null ? yesAsk - yesBid : undefined;
+      const volumeTotal = typeof data.volume === "number" ? data.volume : undefined;
       const volume24h = typeof data.volume_24h === "number" ? data.volume_24h : undefined;
       const liquidity = typeof data.open_interest === "number" ? data.open_interest : undefined;
 
@@ -95,6 +96,7 @@ export class KalshiAdapter implements MarketAdapter {
         bestBid: yesBid ?? undefined,
         bestAsk: yesAsk ?? undefined,
         spread: spread ?? undefined,
+        volumeTotal: volumeTotal as number,
         volume24h: volume24h as number,
         liquidity: liquidity as number,
       };

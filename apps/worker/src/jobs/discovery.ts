@@ -48,6 +48,7 @@ async function discoverSource(
   adapter: { listMarkets(cursor?: string): Promise<{ markets: unknown[]; cursor?: string; hasMore: boolean }> },
   normalize: (raw: Record<string, unknown>) => MarketUpsert | null,
 ): Promise<DiscoveryResult> {
+  const MAX_MARKETS_PER_RUN = 1500;
   const startTime = Date.now();
   let fetched = 0;
   let upserted = 0;
@@ -90,8 +91,8 @@ async function discoverSource(
 
     cursor = page.cursor;
 
-    // Safety: limit to 5 pages per run
-    if (fetched >= 500) break;
+    // Safety: cap the run while still covering a broad top-volume set.
+    if (fetched >= MAX_MARKETS_PER_RUN) break;
   } while (cursor);
 
   const duration = Date.now() - startTime;

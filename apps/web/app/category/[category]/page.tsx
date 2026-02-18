@@ -29,7 +29,7 @@ export async function generateMetadata(
   const label = getCategoryLabel(category);
   return {
     title: `${label} Markets by Volume — PreNews`,
-    description: `Top ${label.toLowerCase()} prediction markets ranked by 24-hour trading volume.`,
+    description: `Top ${label.toLowerCase()} prediction markets ranked by cumulative volume for markets resolving within a year.`,
   };
 }
 
@@ -61,7 +61,7 @@ async function CategoryFeed({ category }: { category: NewsCategory }) {
           resolvesInText={formatResolvesIn(item.resolvesAt)}
           trustTier={item.trustTier}
           source={item.source}
-          volumeText={formatUsdCompact(item.volume24h)}
+          volumeText={formatUsdCompact(item.volumeTotal ?? item.volume24h)}
           rank={item.rank}
         />
       ))}
@@ -84,7 +84,7 @@ export default async function CategoryPage(
       <div className="mb-6">
         <h1 className="text-lg font-semibold text-text">{label}</h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Top 20 {label.toLowerCase()} markets ranked by 24-hour volume.
+          Top 20 {label.toLowerCase()} markets ranked by total volume (resolving within 12 months).
         </p>
       </div>
 

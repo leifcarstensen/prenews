@@ -51,6 +51,7 @@ export const marketState = pgTable("market_state", {
   p: doublePrecision("p").notNull(),
   pJson: jsonb("p_json").$type<Record<string, number>>(),
   topOutcomeProb: doublePrecision("top_outcome_prob"),
+  volumeTotal: doublePrecision("volume_total"),
   volume24h: doublePrecision("volume_24h"),
   liquidity: doublePrecision("liquidity"),
   bestBid: doublePrecision("best_bid"),

@@ -16,6 +16,8 @@ export class PolymarketAdapter implements MarketAdapter {
       limit: "100",
       active: "true",
       closed: "false",
+      order: "volumeNum",
+      ascending: "false",
     });
     if (cursor) params.set("offset", cursor);
 
@@ -71,12 +73,22 @@ export class PolymarketAdapter implements MarketAdapter {
         : null;
 
       const p = outcomePrices ? clampProb(Number(outcomePrices[0])) : 0.5;
+      const volumeTotal = typeof data.volumeNum === "number"
+        ? data.volumeNum
+        : typeof data.volume === "string"
+          ? Number.parseFloat(data.volume)
+          : null;
       const volume24h = typeof data.volume24hr === "number" ? data.volume24hr : null;
-      const liquidity = typeof data.liquidity === "number" ? data.liquidity : null;
+      const liquidity = typeof data.liquidityNum === "number"
+        ? data.liquidityNum
+        : typeof data.liquidity === "string"
+          ? Number.parseFloat(data.liquidity)
+          : null;
 
       return {
         sourceMarketId,
         p,
+        volumeTotal: volumeTotal ?? undefined as unknown as number,
         volume24h: volume24h ?? undefined as unknown as number,
         liquidity: liquidity ?? undefined as unknown as number,
       };
