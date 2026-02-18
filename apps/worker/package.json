@@ -1,0 +1,36 @@
+{
+  "name": "@prenews/worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:adapters": "vitest run --testPathPattern=adapters",
+    "lint": "tsc --noEmit",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "run": "tsx src/cli.ts",
+    "smoke": "tsx src/smoke.ts"
+  },
+  "dependencies": {
+    "@azure/openai": "^2.0.0",
+    "@prenews/shared": "workspace:*",
+    "bullmq": "^5.0.0",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.36.0",
+    "openai": "^6.22.0",
+    "postgres": "^3.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "drizzle-kit": "^0.28.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

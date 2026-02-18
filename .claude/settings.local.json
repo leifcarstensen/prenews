@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(yes:*)",
+      "Bash(corepack pnpm:*)",
+      "Bash(npm ls:*)",
+      "Bash(npx pnpm:*)",
+      "Bash(npx drizzle-kit generate:*)",
+      "Bash(npx vitest run:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:www.npmjs.com)"
+    ]
+  }
+}
