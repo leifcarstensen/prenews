@@ -27,12 +27,19 @@ export async function generateArticleImage(params: {
   try {
     const client = getAzureImageClient();
 
+    console.log(JSON.stringify({
+      job: "image-generation",
+      status: "calling-api",
+      marketId: params.marketId,
+      deployment,
+      endpoint: process.env.AZURE_OPENAI_IMAGE_ENDPOINT ? "set" : "fallback-to-text",
+    }));
+
     const response = await client.images.generate({
       model: deployment,
       prompt: params.prompt,
       n: 1,
-      size: "1792x1024",
-      quality: "high",
+      size: "1024x1024",
     });
 
     const imageData = response.data?.[0];
@@ -107,8 +114,17 @@ export async function generateArticleImage(params: {
     }
 
     return null;
-  } catch (err) {
-    console.warn(`Image generation failed for market ${params.marketId}:`, err);
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const errStatus = (err as { status?: number })?.status;
+    console.error(JSON.stringify({
+      job: "image-generation",
+      status: "error",
+      marketId: params.marketId,
+      error: errMsg,
+      httpStatus: errStatus ?? null,
+      deployment,
+    }));
     return null;
   }
 }

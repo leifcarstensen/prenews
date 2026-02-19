@@ -12,6 +12,11 @@ import {
 } from "../llm/article.js";
 
 const RE_ENRICH_DELTA_THRESHOLD = 0.10; // 10 percentage points
+const ENRICHMENT_DELAY_MS = 3_000; // 3 seconds between LLM calls to respect rate limits
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface EnrichmentResult {
   processed: number;
@@ -22,7 +27,7 @@ interface EnrichmentResult {
   reEnriched: number;
 }
 
-export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResult> {
+export async function enrichmentJob(limit: number = 50): Promise<EnrichmentResult> {
   const startTime = Date.now();
   let processed = 0;
   let llmCalls = 0;
@@ -121,6 +126,7 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
   }
 
   const newMarketIds = new Set(newMarkets.map((m) => m.id));
+  let llmCallCount = 0;
 
   for (const m of allMarkets) {
     try {
@@ -163,6 +169,11 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
         }
       }
 
+      // Rate limit: wait between LLM calls to avoid 429s
+      if (llmCallCount > 0) {
+        await sleep(ENRICHMENT_DELAY_MS);
+      }
+
       // Generate article via Azure OpenAI
       let output: ArticleOutput;
 
@@ -181,6 +192,7 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
         });
 
         llmCalls++;
+        llmCallCount++;
 
         if (!validateArticle(output)) {
           console.warn(`Article validation failed for market ${m.id}, using fallback`);
@@ -193,26 +205,43 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
         fallbacks++;
       }
 
-      // Store artifact
-      await db.insert(llmArtifact).values({
-        marketId: m.id,
-        artifactType: "article",
-        model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o-mini",
-        inputHash,
-        promptHash: ARTICLE_PROMPT_HASH,
-        input: JSON.parse(inputStr),
-        output,
-      }).onConflictDoUpdate({
-        target: [llmArtifact.marketId, llmArtifact.artifactType, llmArtifact.inputHash, llmArtifact.promptHash],
-        set: { output, input: JSON.parse(inputStr) },
-      });
-
+      // Apply article to market first (most important step)
       await applyArticle(m.id, output);
       processed++;
       if (isReEnrich) reEnriched++;
+
+      // Store artifact for caching (non-critical — don't let this block enrichment)
+      try {
+        await db.insert(llmArtifact).values({
+          marketId: m.id,
+          artifactType: "article",
+          model: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o-mini",
+          inputHash,
+          promptHash: ARTICLE_PROMPT_HASH,
+          input: JSON.parse(inputStr),
+          output,
+        }).onConflictDoUpdate({
+          target: [llmArtifact.marketId, llmArtifact.artifactType, llmArtifact.inputHash, llmArtifact.promptHash],
+          set: { output, input: JSON.parse(inputStr) },
+        });
+      } catch (cacheErr) {
+        console.warn(`Failed to cache artifact for market ${m.id}:`, cacheErr);
+        // Non-critical — the article is already applied to the market
+      }
     } catch (err) {
       console.error(`Enrichment failed for market ${m.id}:`, err);
       errors++;
+
+      // Even if everything else failed, try to at least apply a fallback headline
+      try {
+        const state = stateMap.get(m.id);
+        const output = fallbackArticle(m.titleRaw, state?.p ?? 0.5);
+        await applyArticle(m.id, output);
+        fallbacks++;
+        processed++;
+      } catch {
+        // truly failed
+      }
     }
   }
 
