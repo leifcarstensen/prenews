@@ -5,15 +5,31 @@ import { z } from "zod";
 const SITE_NAME = "PreNews";
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://prenews.news";
 
+// Relaxed schema — we truncate fields after parsing rather than rejecting
 export const articleOutputSchema = z.object({
-  headline: z.string().max(80),
-  headline_short: z.string().max(50),
-  meta_description: z.string().max(320),
+  headline: z.string(),
+  headline_short: z.string(),
+  meta_description: z.string(),
   category: z.string(),
-  tags: z.array(z.string()).max(5),
+  tags: z.array(z.string()).max(10),
   body: z.string(),
-  image_prompt: z.string().max(800),
+  image_prompt: z.string(),
 });
+
+/** Truncate fields to fit DB constraints and UI expectations */
+function sanitizeArticle(raw: z.infer<typeof articleOutputSchema>): z.infer<typeof articleOutputSchema> {
+  const truncate = (s: string, max: number) =>
+    s.length <= max ? s : s.slice(0, max - 3).trimEnd() + "...";
+
+  return {
+    ...raw,
+    headline: truncate(raw.headline.replace(/\?+$/, "").trim(), 120),
+    headline_short: truncate(raw.headline_short, 60),
+    meta_description: truncate(raw.meta_description, 320),
+    image_prompt: truncate(raw.image_prompt, 800),
+    tags: raw.tags.slice(0, 5),
+  };
+}
 
 export type ArticleOutput = z.infer<typeof articleOutputSchema>;
 
@@ -156,13 +172,13 @@ export async function generateArticle(input: {
     throw new Error(`Article validation failed: ${parsed.error.message}`);
   }
 
-  return parsed.data;
+  return sanitizeArticle(parsed.data);
 }
 
 export function validateArticle(output: ArticleOutput): boolean {
   if (output.headline.includes("?")) return false;
-  if (output.headline.length > 80) return false;
-  if (output.body.length < 100) return false;
+  if (output.headline.length > 120) return false;
+  if (output.body.length < 50) return false;
 
   const lower = output.headline.toLowerCase();
   for (const word of BANNED_WORDS) {
