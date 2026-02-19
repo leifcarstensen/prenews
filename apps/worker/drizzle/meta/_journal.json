@@ -22,6 +22,20 @@
       "when": 1771448000000,
       "tag": "0002_loud_volume_total",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771534400000,
+      "tag": "0003_add_rules_primary",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771620800000,
+      "tag": "0004_fulltext_search",
+      "breakpoints": true
     }
   ]
 }

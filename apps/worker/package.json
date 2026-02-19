@@ -19,6 +19,7 @@
   "dependencies": {
     "@azure/openai": "^2.0.0",
     "@prenews/shared": "workspace:*",
+    "@vercel/blob": "^2.2.0",
     "bullmq": "^5.0.0",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.36.0",

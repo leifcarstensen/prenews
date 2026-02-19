@@ -8,7 +8,7 @@ export function ArticleBody({ content }: { content: string }) {
 
   return (
     <div
-      className="article-body rounded-[10px] border border-border bg-card p-5 text-sm leading-relaxed text-text-secondary [&_h2]:text-text [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-text [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1.5 [&_p]:mb-3 [&_strong]:text-text [&_strong]:font-medium [&_em]:italic [&_a]:text-accent [&_a]:underline [&_a:hover]:text-accent-hover"
+      className="article-body mx-auto max-w-[680px] rounded-[10px] border border-border bg-card p-5 sm:p-8 text-sm leading-relaxed text-text-secondary [&_h2]:text-text [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-text [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1.5 [&_p]:mb-3 [&_strong]:text-text [&_strong]:font-medium [&_em]:italic [&_a]:text-accent [&_a]:underline [&_a:hover]:text-accent-hover"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

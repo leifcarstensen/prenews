@@ -33,6 +33,7 @@ export const market = pgTable(
     resolvesAt: timestamp("resolves_at", { withTimezone: true }),
     sourceUrl: text("source_url").notNull(),
     imageUrl: text("image_url"),
+    rulesPrimary: text("rules_primary"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

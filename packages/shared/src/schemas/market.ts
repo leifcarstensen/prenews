@@ -19,6 +19,7 @@ export const marketUpsertSchema = z.object({
   resolvesAt: z.date().nullable().default(null),
   sourceUrl: z.string().url(),
   imageUrl: z.string().url().nullable().default(null),
+  rulesPrimary: z.string().nullable().default(null),
 });
 
 export type MarketUpsert = z.infer<typeof marketUpsertSchema>;

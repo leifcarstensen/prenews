@@ -1,15 +1,12 @@
-import { getAzureClient, getImageDeployment } from "./client.js";
+import { getAzureImageClient, getImageDeployment } from "./client.js";
+import { put } from "@vercel/blob";
 
 /**
  * Generate a header image for a market article using GPT-image-1.5.
  *
- * This is a stub — image storage integration is deferred.
- * When ready, this will:
  * 1. Generate the image via Azure OpenAI
- * 2. Upload to blob storage (Azure Blob / Cloudflare R2 / Vercel Blob)
+ * 2. Upload to Vercel Blob for permanent CDN-backed storage
  * 3. Return the public URL
- *
- * For now, it returns null and logs the prompt for debugging.
  */
 export async function generateArticleImage(params: {
   marketId: string;
@@ -23,13 +20,12 @@ export async function generateArticleImage(params: {
       status: "skipped",
       reason: "AZURE_OPENAI_IMAGE_DEPLOYMENT not configured",
       marketId: params.marketId,
-      prompt: params.prompt.slice(0, 100) + "...",
     }));
     return null;
   }
 
   try {
-    const client = getAzureClient();
+    const client = getAzureImageClient();
 
     const response = await client.images.generate({
       model: deployment,
@@ -45,16 +41,69 @@ export async function generateArticleImage(params: {
       return null;
     }
 
-    // TODO: Upload to blob storage and return public URL
-    // For now, return the temporary URL if available
+    // If we have a URL, fetch the image and upload to Vercel Blob
     if (imageData.url) {
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        const imageResponse = await fetch(imageData.url);
+        if (!imageResponse.ok) {
+          console.warn(`Failed to fetch generated image for market ${params.marketId}: ${imageResponse.status}`);
+          return null;
+        }
+
+        const imageBuffer = await imageResponse.arrayBuffer();
+        const blob = await put(
+          `articles/${params.marketId}.png`,
+          Buffer.from(imageBuffer),
+          {
+            access: "public",
+            contentType: "image/png",
+            addRandomSuffix: false,
+          },
+        );
+
+        console.log(JSON.stringify({
+          job: "image-generation",
+          status: "stored",
+          marketId: params.marketId,
+          url: blob.url,
+        }));
+
+        return blob.url;
+      }
+
+      // Fallback: return temp URL if Vercel Blob not configured
       console.log(JSON.stringify({
         job: "image-generation",
         status: "generated",
         marketId: params.marketId,
-        note: "image generated but storage not configured — URL is temporary",
+        note: "BLOB_READ_WRITE_TOKEN not set — returning temporary URL",
       }));
       return imageData.url;
+    }
+
+    // If we have base64 data, upload directly
+    if (imageData.b64_json) {
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        const imageBuffer = Buffer.from(imageData.b64_json, "base64");
+        const blob = await put(
+          `articles/${params.marketId}.png`,
+          imageBuffer,
+          {
+            access: "public",
+            contentType: "image/png",
+            addRandomSuffix: false,
+          },
+        );
+
+        console.log(JSON.stringify({
+          job: "image-generation",
+          status: "stored",
+          marketId: params.marketId,
+          url: blob.url,
+        }));
+
+        return blob.url;
+      }
     }
 
     return null;

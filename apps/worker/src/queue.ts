@@ -65,6 +65,7 @@ export const JOB_NAMES = {
   PRICING: "pricing",
   ENRICHMENT: "enrichment",
   FEED_BUILD: "feed-build",
+  IMAGE_GEN: "image-gen",
 } as const;
 
 export const jobQueue = new Queue("prenews-jobs", {

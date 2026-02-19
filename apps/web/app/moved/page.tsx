@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getFeedItems, type MarketWithState } from "@/lib/queries";
+import { getFeedItems, getSparklineData, type MarketWithState } from "@/lib/queries";
 import { formatProbability, formatResolvesIn } from "@prenews/shared";
 import { MarketCard } from "@/components/market-card";
 import { SkeletonFeed } from "@/components/skeleton-card";
@@ -7,8 +7,8 @@ import { SkeletonFeed } from "@/components/skeleton-card";
 export const revalidate = 60;
 
 export const metadata = {
-  title: "Biggest Movers — PreNews",
-  description: "Prediction markets with the largest probability changes in the last 24 hours.",
+  title: "Tomorrow's Headlines — PreNews",
+  description: "Markets with the largest probability repricing in the last 24 hours — the news before it happens.",
 };
 
 async function MovedFeed() {
@@ -27,6 +27,11 @@ async function MovedFeed() {
     );
   }
 
+  let sparklines = new Map<string, number[]>();
+  try {
+    sparklines = await getSparklineData(items.map((m) => m.id));
+  } catch {}
+
   return (
     <div className="space-y-3">
       {items.map((item) => (
@@ -41,6 +46,8 @@ async function MovedFeed() {
           source={item.source}
           rank={item.rank}
           showMovement={true}
+          imageUrl={item.articleImageUrl}
+          sparkline={sparklines.get(item.id)}
         />
       ))}
     </div>
@@ -51,9 +58,9 @@ export default function MovedPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-lg font-semibold text-text">Biggest Movers</h1>
+        <h1 className="text-lg font-semibold text-text">Tomorrow&apos;s Headlines</h1>
         <p className="text-sm text-text-secondary mt-1">
-          Markets with the largest probability repricing in the last 24 hours.
+          Markets with the largest probability repricing in the last 24 hours — the news before it happens.
         </p>
       </div>
 

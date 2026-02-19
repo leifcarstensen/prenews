@@ -1,6 +1,6 @@
 import "./env.js";
 import { createWorker, jobQueue, JOB_NAMES } from "./queue.js";
-import { discoveryJob, pricingJob, enrichmentJob, feedBuildJob } from "./jobs/index.js";
+import { discoveryJob, pricingJob, enrichmentJob, feedBuildJob, imageGenJob } from "./jobs/index.js";
 import type { Job } from "bullmq";
 
 async function processJob(job: Job): Promise<void> {
@@ -20,6 +20,9 @@ async function processJob(job: Job): Promise<void> {
         break;
       case JOB_NAMES.FEED_BUILD:
         await feedBuildJob();
+        break;
+      case JOB_NAMES.IMAGE_GEN:
+        await imageGenJob();
         break;
       default:
         console.warn(`Unknown job: ${job.name}`);
@@ -58,6 +61,12 @@ async function setupSchedules() {
   // Feed build: every 5 minutes
   await jobQueue.add(JOB_NAMES.FEED_BUILD, {}, {
     repeat: { pattern: "*/5 * * * *" },
+  });
+
+  // Image generation: every hour (lower priority, runs after enrichment)
+  await jobQueue.add(JOB_NAMES.IMAGE_GEN, {}, {
+    repeat: { pattern: "0 * * * *" },
+    priority: 10,
   });
 
   console.log("Job schedules configured");

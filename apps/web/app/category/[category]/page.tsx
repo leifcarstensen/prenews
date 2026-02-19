@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { getTopMarketsByVolume, type MarketWithState } from "@/lib/queries";
+import { getTopMarketsByVolume, getSparklineData, type MarketWithState } from "@/lib/queries";
 import { formatProbability, formatResolvesIn } from "@prenews/shared";
 import { MarketCard } from "@/components/market-card";
 import { SkeletonFeed } from "@/components/skeleton-card";
@@ -49,6 +49,11 @@ async function CategoryFeed({ category }: { category: NewsCategory }) {
     );
   }
 
+  let sparklines = new Map<string, number[]>();
+  try {
+    sparklines = await getSparklineData(items.map((m) => m.id));
+  } catch {}
+
   return (
     <div className="space-y-3">
       {items.map((item) => (
@@ -63,6 +68,8 @@ async function CategoryFeed({ category }: { category: NewsCategory }) {
           source={item.source}
           volumeText={formatUsdCompact(item.volumeTotal ?? item.volume24h)}
           rank={item.rank}
+          imageUrl={item.articleImageUrl}
+          sparkline={sparklines.get(item.id)}
         />
       ))}
     </div>

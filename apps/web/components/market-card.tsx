@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TrustBadge } from "./trust-badge";
 import { DeltaBadge } from "./delta-badge";
+import { Sparkline } from "./sparkline";
 
 export interface MarketCardProps {
   slug: string;
@@ -15,6 +16,8 @@ export interface MarketCardProps {
   delta1hText?: string | null;
   rank?: number;
   showMovement?: boolean;
+  imageUrl?: string | null;
+  sparkline?: number[];
 }
 
 export function MarketCard({
@@ -30,6 +33,8 @@ export function MarketCard({
   delta1hText,
   rank,
   showMovement = false,
+  imageUrl,
+  sparkline,
 }: MarketCardProps) {
   return (
     <Link
@@ -38,6 +43,15 @@ export function MarketCard({
       tabIndex={0}
     >
       <div className="flex items-start justify-between gap-3">
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt=""
+            className="hidden sm:block w-16 h-16 rounded-md object-cover shrink-0"
+            loading="lazy"
+          />
+        )}
+
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1.5">
             {category && (
@@ -69,6 +83,9 @@ export function MarketCard({
           <span className="text-xl font-semibold tabular-nums text-text">
             {probabilityText}
           </span>
+          {sparkline && sparkline.length >= 2 && (
+            <Sparkline data={sparkline} />
+          )}
           {showMovement && (delta24hText || delta1hText) && (
             <DeltaBadge text={delta24hText ?? delta1hText ?? null} />
           )}

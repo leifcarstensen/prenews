@@ -1,7 +1,8 @@
 import type { MarketAdapter, MarketRawPage, MarketStateRaw, AdapterConfig } from "./types.js";
 import { type MarketUpsert, slugify, clampProb } from "@prenews/shared";
+import { fetchWithRetry } from "./retry.js";
 
-const DEFAULT_API_URL = "https://api.elections.kalshi.com/trade-api/v2";
+const DEFAULT_API_URL = "https://trading-api.kalshi.com/trade-api/v2";
 
 export class KalshiAdapter implements MarketAdapter {
   source = "kalshi" as const;
@@ -29,7 +30,7 @@ export class KalshiAdapter implements MarketAdapter {
     if (cursor) params.set("cursor", cursor);
 
     const url = `${this.apiUrl}/markets?${params}`;
-    const res = await fetch(url, { headers: this.headers });
+    const res = await fetchWithRetry(url, { headers: this.headers });
 
     if (!res.ok) {
       throw new Error(`Kalshi API error: ${res.status} ${res.statusText}`);
@@ -49,7 +50,7 @@ export class KalshiAdapter implements MarketAdapter {
 
     for (const ticker of sourceMarketIds) {
       try {
-        const res = await fetch(`${this.apiUrl}/markets/${ticker}`, {
+        const res = await fetchWithRetry(`${this.apiUrl}/markets/${ticker}`, {
           headers: this.headers,
         });
 
@@ -107,20 +108,45 @@ export class KalshiAdapter implements MarketAdapter {
   }
 }
 
+/** Map Kalshi's raw category string to shared taxonomy values. */
+function mapKalshiCategory(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (lower.includes("politic") || lower.includes("election")) return "politics";
+  if (lower.includes("sport")) return "sports";
+  if (lower.includes("crypto") || lower.includes("bitcoin")) return "crypto";
+  if (lower.includes("econom") || lower.includes("financ") || lower.includes("fed") || lower.includes("inflation")) return "economics";
+  if (lower.includes("climate") || lower.includes("science") || lower.includes("tech")) return "technology";
+  if (lower.includes("world") || lower.includes("international") || lower.includes("geopolit")) return "world";
+  return raw;
+}
+
 export function normalizeKalshiMarket(raw: Record<string, unknown>): MarketUpsert | null {
   try {
     const ticker = String(raw.ticker ?? "");
     if (!ticker) return null;
 
-    const title = String(raw.title ?? raw.subtitle ?? "");
+    // Prefer subtitle (more readable) with title as fallback
+    const title = String(raw.subtitle ?? raw.title ?? "");
     if (!title) return null;
 
     const isBinary = raw.market_type !== "multiple_choice";
-    const closeTime = raw.close_time ?? raw.expiration_time;
+    // Prefer expected_expiration_time (more precise) over close_time
+    const closeTime = raw.expected_expiration_time ?? raw.close_time ?? raw.expiration_time;
     const resolvesAt = closeTime ? new Date(String(closeTime)) : null;
 
     const slug = slugify(title);
     const eventTicker = String(raw.event_ticker ?? ticker);
+
+    // Capture Kalshi resolution rules for article generation context
+    const rulesPrimary = typeof raw.rules_primary === "string" ? raw.rules_primary : null;
+    const yesSubTitle = typeof raw.yes_sub_title === "string" ? raw.yes_sub_title : null;
+    const noSubTitle = typeof raw.no_sub_title === "string" ? raw.no_sub_title : null;
+
+    // Build tags from Kalshi sub-titles and resolution context
+    const tags: string[] = [];
+    if (yesSubTitle) tags.push(yesSubTitle.toLowerCase());
+    if (noSubTitle) tags.push(noSubTitle.toLowerCase());
 
     return {
       source: "kalshi",
@@ -128,14 +154,15 @@ export function normalizeKalshiMarket(raw: Record<string, unknown>): MarketUpser
       slug,
       titleRaw: title,
       headline: null,
-      category: typeof raw.category === "string" ? raw.category : null,
-      tags: [],
+      category: mapKalshiCategory(typeof raw.category === "string" ? raw.category : null),
+      tags,
       marketType: isBinary ? "binary" : "multi",
       outcomes: isBinary ? ["Yes", "No"] : [],
       status: raw.status === "open" ? "active" : raw.status === "closed" ? "closed" : "active",
       resolvesAt,
       sourceUrl: `https://kalshi.com/markets/${eventTicker}`,
       imageUrl: null,
+      rulesPrimary,
     };
   } catch (err) {
     console.warn("Failed to normalize Kalshi market:", err);

@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, and, desc, asc, gte, lte, ilike } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, ilike, ne, sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -328,8 +328,113 @@ export async function searchMarkets(
     })
     .from(market)
     .innerJoin(marketState, eq(market.id, marketState.marketId))
-    .where(ilike(market.titleRaw, `%${query}%`))
-    .orderBy(desc(marketState.p))
+    .where(
+      sql`to_tsvector('english', ${market.titleRaw} || ' ' || COALESCE(${market.headline}, '')) @@ plainto_tsquery('english', ${query})`
+    )
+    .orderBy(desc(marketState.volumeTotal))
+    .limit(limit);
+
+  return rows.map((r, i) => ({ ...r, rank: i + 1, score: 0 })) as MarketWithState[];
+}
+
+/**
+ * Fetch 7-day sparkline data for a batch of market IDs.
+ * Returns a map from marketId to an array of probability values (oldest first).
+ * Downsampled to ~24 points (one per ~7 hours) for tiny sparklines.
+ */
+export async function getSparklineData(
+  marketIds: string[],
+): Promise<Map<string, number[]>> {
+  if (marketIds.length === 0) return new Map();
+
+  const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 3600;
+
+  const rows = await db
+    .select({
+      marketId: marketSnapshot.marketId,
+      tsBucket: marketSnapshot.tsBucket,
+      p: marketSnapshot.p,
+    })
+    .from(marketSnapshot)
+    .where(
+      and(
+        sql`${marketSnapshot.marketId} = ANY(${marketIds}::uuid[])`,
+        gte(marketSnapshot.tsBucket, sevenDaysAgo),
+      ),
+    )
+    .orderBy(asc(marketSnapshot.tsBucket));
+
+  // Group by marketId
+  const grouped = new Map<string, { tsBucket: number; p: number }[]>();
+  for (const row of rows) {
+    const existing = grouped.get(row.marketId) || [];
+    existing.push({ tsBucket: row.tsBucket, p: row.p });
+    grouped.set(row.marketId, existing);
+  }
+
+  // Downsample to ~24 points per market
+  const result = new Map<string, number[]>();
+  for (const [marketId, snapshots] of grouped) {
+    if (snapshots.length <= 24) {
+      result.set(marketId, snapshots.map((s) => s.p));
+    } else {
+      const step = snapshots.length / 24;
+      const sampled: number[] = [];
+      for (let i = 0; i < 24; i++) {
+        sampled.push(snapshots[Math.floor(i * step)]!.p);
+      }
+      // Always include the latest point
+      sampled.push(snapshots[snapshots.length - 1]!.p);
+      result.set(marketId, sampled);
+    }
+  }
+
+  return result;
+}
+
+export async function getRelatedMarkets(
+  excludeMarketId: string,
+  category: string | null,
+  limit: number = 3,
+): Promise<MarketWithState[]> {
+  if (!category) return [];
+
+  const rows = await db
+    .select({
+      id: market.id,
+      source: market.source,
+      slug: market.slug,
+      titleRaw: market.titleRaw,
+      headline: market.headline,
+      articleBody: market.articleBody,
+      articleMetaDescription: market.articleMetaDescription,
+      articleImageUrl: market.articleImageUrl,
+      category: market.category,
+      tags: market.tags,
+      marketType: market.marketType,
+      outcomes: market.outcomes,
+      resolvesAt: market.resolvesAt,
+      sourceUrl: market.sourceUrl,
+      imageUrl: market.imageUrl,
+      p: marketState.p,
+      pJson: marketState.pJson,
+      volumeTotal: marketState.volumeTotal,
+      volume24h: marketState.volume24h,
+      liquidity: marketState.liquidity,
+      spread: marketState.spread,
+      trustTier: marketState.trustTier,
+      stateUpdatedAt: marketState.updatedAt,
+    })
+    .from(market)
+    .innerJoin(marketState, eq(market.id, marketState.marketId))
+    .where(
+      and(
+        eq(market.category, category),
+        eq(market.status, "active"),
+        ne(market.id, excludeMarketId),
+      ),
+    )
+    .orderBy(desc(marketState.volumeTotal))
     .limit(limit);
 
   return rows.map((r, i) => ({ ...r, rank: i + 1, score: 0 })) as MarketWithState[];

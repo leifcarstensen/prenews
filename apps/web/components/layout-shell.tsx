@@ -6,6 +6,7 @@ import { CATEGORY_NAV } from "@/lib/categories";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home" },
+  { href: "/moved", label: "Headlines" },
   ...CATEGORY_NAV.map((item) => ({ href: item.href, label: item.label })),
 ];
 
@@ -16,12 +17,17 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen">
       <header className="sticky top-0 z-50 border-b border-border bg-card/80 backdrop-blur-md">
         <div className="mx-auto flex min-h-12 max-w-5xl items-center justify-between gap-4 px-4 py-2">
-          <Link
-            href="/"
-            className="text-base font-semibold tracking-tight text-text"
-          >
-            PreNews
-          </Link>
+          <div className="flex items-baseline gap-2">
+            <Link
+              href="/"
+              className="text-base font-semibold tracking-tight text-text"
+            >
+              PreNews
+            </Link>
+            <span className="hidden sm:inline text-xs text-text-muted">
+              The news before it happens
+            </span>
+          </div>
 
           <nav className="flex flex-wrap items-center justify-end gap-1">
             {NAV_ITEMS.map((item) => {

@@ -1,6 +1,6 @@
 import { db } from "../db/connection.js";
 import { market, marketState, marketSnapshot, llmArtifact } from "../db/schema.js";
-import { isNull, eq, gte } from "drizzle-orm";
+import { isNull, eq, gte, isNotNull, and, sql } from "drizzle-orm";
 import { computeDeltas } from "@prenews/shared";
 import {
   generateArticle,
@@ -11,12 +11,15 @@ import {
   type ArticleOutput,
 } from "../llm/article.js";
 
+const RE_ENRICH_DELTA_THRESHOLD = 0.10; // 10 percentage points
+
 interface EnrichmentResult {
   processed: number;
   llmCalls: number;
   cached: number;
   fallbacks: number;
   errors: number;
+  reEnriched: number;
 }
 
 export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResult> {
@@ -26,24 +29,41 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
   let cached = 0;
   let fallbacks = 0;
   let errors = 0;
+  let reEnriched = 0;
 
-  // Find markets missing headline or article body
-  const markets = await db
+  // Find markets missing headline (new markets)
+  const newMarkets = await db
     .select({
       id: market.id,
       titleRaw: market.titleRaw,
       outcomes: market.outcomes,
       resolvesAt: market.resolvesAt,
       source: market.source,
+      rulesPrimary: market.rulesPrimary,
     })
     .from(market)
     .where(isNull(market.headline))
     .limit(limit);
 
-  if (markets.length === 0) {
-    console.log(JSON.stringify({ job: "enrichment", message: "no markets to enrich" }));
-    return { processed: 0, llmCalls: 0, cached: 0, fallbacks: 0, errors: 0 };
-  }
+  // Find markets that already have articles but have moved >10pts in 24h
+  // (candidates for re-enrichment)
+  const reEnrichCandidates = await db
+    .select({
+      id: market.id,
+      titleRaw: market.titleRaw,
+      outcomes: market.outcomes,
+      resolvesAt: market.resolvesAt,
+      source: market.source,
+      rulesPrimary: market.rulesPrimary,
+    })
+    .from(market)
+    .where(
+      and(
+        isNotNull(market.headline),
+        eq(market.status, "active"),
+      ),
+    )
+    .limit(limit);
 
   // Batch-fetch current states for all markets
   const states = await db
@@ -52,6 +72,7 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
       p: marketState.p,
       volume24h: marketState.volume24h,
       liquidity: marketState.liquidity,
+      trustTier: marketState.trustTier,
     })
     .from(marketState);
 
@@ -75,12 +96,40 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
     snapshotsByMarket.set(snap.marketId, list);
   }
 
-  for (const m of markets) {
+  // Filter re-enrich candidates: only those with >10pt delta
+  const reEnrichMarkets = reEnrichCandidates.filter((m) => {
+    const state = stateMap.get(m.id);
+    if (!state) return false;
+    const snapshots = snapshotsByMarket.get(m.id) || [];
+    const deltas = computeDeltas(state.p, snapshots);
+    return deltas.delta24h != null && Math.abs(deltas.delta24h) >= RE_ENRICH_DELTA_THRESHOLD;
+  });
+
+  if (reEnrichMarkets.length > 0) {
+    console.log(JSON.stringify({
+      job: "enrichment",
+      message: `${reEnrichMarkets.length} markets qualify for re-enrichment (>10pt 24h delta)`,
+    }));
+  }
+
+  // Combine: new markets first, then re-enrich candidates (capped at limit)
+  const allMarkets = [...newMarkets, ...reEnrichMarkets].slice(0, limit);
+
+  if (allMarkets.length === 0) {
+    console.log(JSON.stringify({ job: "enrichment", message: "no markets to enrich" }));
+    return { processed: 0, llmCalls: 0, cached: 0, fallbacks: 0, errors: 0, reEnriched: 0 };
+  }
+
+  const newMarketIds = new Set(newMarkets.map((m) => m.id));
+
+  for (const m of allMarkets) {
     try {
       const state = stateMap.get(m.id);
       const probability = state?.p ?? 0.5;
+      const trustTier = state?.trustTier ?? "low";
       const snapshots = snapshotsByMarket.get(m.id) || [];
       const deltas = computeDeltas(probability, snapshots);
+      const isReEnrich = !newMarketIds.has(m.id);
 
       const inputStr = JSON.stringify({
         title: m.titleRaw,
@@ -91,23 +140,27 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
         volume_24h: state?.volume24h ?? null,
         liquidity: state?.liquidity ?? null,
         delta_24h: deltas.delta24h,
+        trust_tier: trustTier,
+        rules_primary: m.rulesPrimary ?? null,
       });
       const inputHash = hash(inputStr);
 
-      // Check cache
-      const existing = await db
-        .select()
-        .from(llmArtifact)
-        .where(eq(llmArtifact.marketId, m.id))
-        .limit(1);
+      // Check cache (skip for re-enrichment — we always want fresh content)
+      if (!isReEnrich) {
+        const existing = await db
+          .select()
+          .from(llmArtifact)
+          .where(eq(llmArtifact.marketId, m.id))
+          .limit(1);
 
-      const existingRow = existing[0];
-      if (existingRow && existingRow.inputHash === inputHash && existingRow.promptHash === ARTICLE_PROMPT_HASH) {
-        const output = existingRow.output as ArticleOutput;
-        await applyArticle(m.id, output);
-        cached++;
-        processed++;
-        continue;
+        const existingRow = existing[0];
+        if (existingRow && existingRow.inputHash === inputHash && existingRow.promptHash === ARTICLE_PROMPT_HASH) {
+          const output = existingRow.output as ArticleOutput;
+          await applyArticle(m.id, output);
+          cached++;
+          processed++;
+          continue;
+        }
       }
 
       // Generate article via Azure OpenAI
@@ -123,6 +176,8 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
           volume24h: state?.volume24h ?? null,
           liquidity: state?.liquidity ?? null,
           delta24h: deltas.delta24h,
+          trustTier,
+          rulesPrimary: m.rulesPrimary ?? null,
         });
 
         llmCalls++;
@@ -154,6 +209,7 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
 
       await applyArticle(m.id, output);
       processed++;
+      if (isReEnrich) reEnriched++;
     } catch (err) {
       console.error(`Enrichment failed for market ${m.id}:`, err);
       errors++;
@@ -168,10 +224,11 @@ export async function enrichmentJob(limit: number = 100): Promise<EnrichmentResu
     cached,
     fallbacks,
     errors,
+    reEnriched,
     duration_ms: duration,
   }));
 
-  return { processed, llmCalls, cached, fallbacks, errors };
+  return { processed, llmCalls, cached, fallbacks, errors, reEnriched };
 }
 
 async function applyArticle(marketId: string, output: ArticleOutput): Promise<void> {

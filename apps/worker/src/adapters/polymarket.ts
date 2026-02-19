@@ -1,5 +1,6 @@
 import type { MarketAdapter, MarketRawPage, MarketStateRaw, AdapterConfig } from "./types.js";
 import { type MarketUpsert, type MarketStateUpsert, type MarketSnapshotInsert, computeTsBucket, slugify, clampProb } from "@prenews/shared";
+import { fetchWithRetry } from "./retry.js";
 
 const DEFAULT_API_URL = "https://gamma-api.polymarket.com";
 
@@ -22,7 +23,7 @@ export class PolymarketAdapter implements MarketAdapter {
     if (cursor) params.set("offset", cursor);
 
     const url = `${this.apiUrl}/markets?${params}`;
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: { "Accept": "application/json" },
     });
 
@@ -45,7 +46,7 @@ export class PolymarketAdapter implements MarketAdapter {
 
     for (const id of sourceMarketIds) {
       try {
-        const res = await fetch(`${this.apiUrl}/markets/${id}`, {
+        const res = await fetchWithRetry(`${this.apiUrl}/markets/${id}`, {
           headers: { "Accept": "application/json" },
         });
 
@@ -134,6 +135,7 @@ export function normalizePolymarketMarket(raw: Record<string, unknown>): MarketU
       resolvesAt,
       sourceUrl: `https://polymarket.com/event/${slug}`,
       imageUrl,
+      rulesPrimary: null,
     };
   } catch (err) {
     console.warn("Failed to normalize Polymarket market:", err);
