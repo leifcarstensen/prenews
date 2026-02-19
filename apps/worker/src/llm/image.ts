@@ -39,7 +39,10 @@ export async function generateArticleImage(params: {
       model: deployment,
       prompt: params.prompt,
       n: 1,
-      size: "1024x1024",
+      size: "1536x1024" as any,
+      quality: "medium" as any,
+      output_format: "jpeg" as any,
+      output_compression: 80 as any,
     });
 
     const imageData = response.data?.[0];
@@ -59,11 +62,11 @@ export async function generateArticleImage(params: {
 
         const imageBuffer = await imageResponse.arrayBuffer();
         const blob = await put(
-          `articles/${params.marketId}.png`,
+          `articles/${params.marketId}.jpg`,
           Buffer.from(imageBuffer),
           {
             access: "public",
-            contentType: "image/png",
+            contentType: "image/jpeg",
             addRandomSuffix: false,
           },
         );
@@ -93,11 +96,11 @@ export async function generateArticleImage(params: {
       if (process.env.BLOB_READ_WRITE_TOKEN) {
         const imageBuffer = Buffer.from(imageData.b64_json, "base64");
         const blob = await put(
-          `articles/${params.marketId}.png`,
+          `articles/${params.marketId}.jpg`,
           imageBuffer,
           {
             access: "public",
-            contentType: "image/png",
+            contentType: "image/jpeg",
             addRandomSuffix: false,
           },
         );

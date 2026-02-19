@@ -12,7 +12,7 @@ export const articleOutputSchema = z.object({
   category: z.string(),
   tags: z.array(z.string()).max(5),
   body: z.string(),
-  image_prompt: z.string().max(500),
+  image_prompt: z.string().max(800),
 });
 
 export type ArticleOutput = z.infer<typeof articleOutputSchema>;
@@ -47,16 +47,18 @@ function getTrustContext(trustTier: string): string {
   }
 }
 
-const ARTICLE_PROMPT = `You are a premium editorial writer for ${SITE_NAME} (${SITE_URL}), a market-probability news platform that transforms prediction market data into news articles.
+const ARTICLE_PROMPT = `You are a senior editorial writer for ${SITE_NAME} (${SITE_URL}), a market-probability news platform. Your job is to transform raw prediction market data into short, high-quality news articles that give readers real journalistic context.
 
-Given a prediction market title and data, generate a complete article. The article should:
-- Be factual, grounded only in the market data provided
-- Read like a premium, calm financial analysis (think Bloomberg or The Economist tone)
-- Be SEO-optimized: naturally include relevant search keywords people would use to find news on this topic
-- Reference ${SITE_NAME} as the source tracking this market
-- Include the current probability and what it means
-- Provide context on why this market matters and what resolution would look like
-- Be 150-300 words (concise but substantive)
+WRITING STYLE:
+- Write like a Bloomberg or Reuters correspondent — neutral, authoritative, no opinion
+- The headline should read like a real newspaper headline (declarative, no question marks, no clickbait)
+- The article body should be SHORT (100-200 words) but provide real context:
+  1. Lead with the key finding: what the market is pricing and at what probability
+  2. Provide brief background context so a reader unfamiliar with the topic understands what is happening and why it matters. Use general knowledge — e.g. who the people involved are, what the policy implications are, what happened recently to move the market
+  3. Close with the market data: mention the probability, and note the resolution timeline
+- Do NOT editorialize or take political sides. Just explain what is happening factually
+- Do NOT fabricate specific news events, quotes, or statistics — but you CAN reference widely known public context (e.g. "Trump has publicly discussed potential nominees" or "The Fed held rates steady at its last meeting")
+- Naturally mention "${SITE_NAME}" once in the body
 
 PROBABILITY-ADAPTIVE FRAMING:
 Adjust your tone based on the probability level provided in the framing instructions below the market data.
@@ -65,28 +67,30 @@ TRUST CONTEXT:
 Use the trust tier context to add appropriate hedging language. High-trust markets can be discussed with more confidence; low-trust markets should include caveats about thin liquidity.
 
 RESOLUTION CRITERIA:
-If resolution rules are provided, use them to explain exactly how this market resolves. This prevents hallucination and grounds the article factually.
+If resolution rules are provided, use them to explain how this market resolves.
 
 MULTI-OUTCOME MARKETS:
-If the market has more than 2 outcomes, present the data as a probability distribution. Focus the article on the leading outcome and its nearest competitor. Use language like "Traders assign X% probability to A, with B at Y%."
+If the market has more than 2 outcomes, focus on the leading outcome and its nearest competitor.
+
+IMAGE PROMPT:
+Generate a detailed prompt for a hyper-photorealistic cover image that a premium newspaper like the New York Times would use for this story. Think: editorial photography, photojournalism, landscape composition. The image should visually represent the subject matter of the story — real-world scenes, people, places, or objects relevant to the topic. NO abstract art, NO geometric shapes, NO data visualizations, NO text overlays, NO watermarks. Aim for cinematic lighting, shallow depth of field, natural color grading.
 
 Output format (strict JSON):
 {
-  "headline": "max 80 chars, no question marks, no sensational terms, hooky but calm",
+  "headline": "max 80 chars, declarative newspaper headline, no question marks",
   "headline_short": "max 50 chars, for cards/social",
-  "meta_description": "max 320 chars, SEO meta description mentioning ${SITE_NAME} and key probability",
+  "meta_description": "max 320 chars, SEO meta description mentioning ${SITE_NAME} and the key probability",
   "category": "one of: politics, economics, technology, crypto, science, sports, entertainment, world, other",
   "tags": ["1-5 lowercase tags"],
-  "body": "full article body in markdown (use ## for subheadings, **bold** for emphasis)",
-  "image_prompt": "a detailed image generation prompt for a premium editorial header image, photorealistic editorial photography style, muted blue and grey tones, premium news magazine aesthetic, no text, no watermarks, no overlaid words, max 500 chars"
+  "body": "100-200 word article body in markdown (use ## for one subheading if needed, **bold** for key figures)",
+  "image_prompt": "hyper-photorealistic editorial photograph prompt, landscape orientation, cinematic lighting, relevant to the story subject, max 500 chars"
 }
 
 Rules:
 - No question marks in headline
-- No sensational/clickbait terms
-- Do not invent facts beyond what market data shows
+- No sensational/clickbait terms (no: shocking, breaking, bombshell, explosive, devastating, etc.)
 - Article must mention the probability percentage prominently
-- Naturally mention "${SITE_NAME} tracking" or "${SITE_NAME} data shows" once in the body
+- Keep body concise: 100-200 words, not more
 - Meta description must be compelling for search results`;
 
 export function hash(input: string): string {
@@ -188,7 +192,7 @@ export function fallbackArticle(titleRaw: string, probability: number): ArticleO
     category: "other",
     tags: [],
     body: `Prediction markets currently place the probability of this outcome at **${probText}**.\n\n${SITE_NAME} tracks this market in real time. Visit the market page for live probability updates, historical charts, and source links.`,
-    image_prompt: "abstract minimalist editorial illustration, muted blue and grey tones, premium news magazine aesthetic, geometric shapes suggesting probability and data, dark background with subtle gradient, no text, no watermarks",
+    image_prompt: "hyper-photorealistic editorial photograph of a modern newsroom with multiple screens showing financial data, cinematic lighting, shallow depth of field, natural color grading, landscape orientation, no text overlays, no watermarks",
   };
 }
 
